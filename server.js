@@ -55,18 +55,22 @@ class QuestionDatabase {
     }
 
     generateKey(title, questionText, options) {
-        const optionsStr = options.sort().join("|");
-        return `${title}::${questionText}::${optionsStr}`;
+        const optionsStr = options.map(opt => String(opt)).sort().join("|");
+        return `${String(title)}::${String(questionText)}::${optionsStr}`;
     }
 
     findAnswer(title, questionText, options) {
         const key = this.generateKey(title, questionText, options);
-        return this.db[key] || null;
+        const answer = this.db[key];
+        if (answer && options.map(opt => String(opt)).includes(String(answer))) {
+            return String(answer);
+        }
+        return null;
     }
 
     async saveAnswer(title, questionText, options, correctAnswer) {
         const key = this.generateKey(title, questionText, options);
-        this.db[key] = correctAnswer;
+        this.db[key] = String(correctAnswer);
         await this.saveDatabase();
         console.log(`💾 Question sauvegardée: '${title}' -> '${correctAnswer}'`);
     }
@@ -179,8 +183,9 @@ app.post("/human-answer", async (req, res) => {
         });
     }
 
-    // Vérifier que la réponse est dans les options
-    if (!pendingQuestion.options.includes(answer)) {
+    // Vérifier que la réponse est dans les options (conversion en string)
+    const validOptions = pendingQuestion.options.map(opt => String(opt));
+    if (!validOptions.includes(String(answer))) {
         return res.status(400).json({
             success: false,
             error: "Réponse non valide",
@@ -191,7 +196,7 @@ app.post("/human-answer", async (req, res) => {
     console.log(`👤 Réponse humaine reçue: '${answer}'`);
     
     // Marquer la réponse comme reçue
-    pendingQuestion.humanAnswer = answer;
+    pendingQuestion.humanAnswer = String(answer);
     pendingQuestion.saveIfCorrect = saveIfCorrect;
     waitingForHumanIntervention = false;
 
@@ -432,35 +437,38 @@ function normalizeText(text) {
 }
 
 function strstrMatch(title, options) {
-    const titleLower = title.toLowerCase();
+    const titleLower = String(title).toLowerCase();
     
     for (const option of options) {
-        const optionLower = option.toLowerCase();
+        const optionStr = String(option);
+        const optionLower = optionStr.toLowerCase();
         if (titleLower.includes(optionLower)) {
             console.log(`✅ Correspondance strstr: '${option}' dans '${title}'`);
-            return option;
+            return optionStr;
         }
     }
     return null;
 }
 
 function artistTitleAnalysis(title, options, questionText) {
-    const questionLower = questionText.toLowerCase();
+    const questionLower = String(questionText).toLowerCase();
     
     const isArtistQuestion = ['ninde', 'yaririmvye', 'artist', 'singer', 'chanteur']
         .some(word => questionLower.includes(word));
     const isTitleQuestion = ['zina', 'ndirimbo', 'title', 'titre', 'song']
         .some(word => questionLower.includes(word));
     
-    if (title.includes(' - ')) {
-        const [artistPart, titlePart] = title.split(' - ', 2);
+    const titleStr = String(title);
+    if (titleStr.includes(' - ')) {
+        const [artistPart, titlePart] = titleStr.split(' - ', 2);
         
         if (isArtistQuestion) {
             console.log(`🎤 Question artiste détectée: '${artistPart}'`);
             for (const option of options) {
-                if (normalizeText(option) === normalizeText(artistPart)) {
+                const optionStr = String(option);
+                if (normalizeText(optionStr) === normalizeText(artistPart)) {
                     console.log(`✅ Artiste trouvé: '${option}'`);
-                    return option;
+                    return optionStr;
                 }
             }
         }
@@ -468,9 +476,10 @@ function artistTitleAnalysis(title, options, questionText) {
         if (isTitleQuestion) {
             console.log(`🎵 Question titre détectée: '${titlePart}'`);
             for (const option of options) {
-                if (normalizeText(option) === normalizeText(titlePart)) {
+                const optionStr = String(option);
+                if (normalizeText(optionStr) === normalizeText(titlePart)) {
                     console.log(`✅ Titre trouvé: '${option}'`);
-                    return option;
+                    return optionStr;
                 }
             }
         }
@@ -483,21 +492,24 @@ function findBestAnswer(questionText, title, options) {
     console.log(`🎵 Titre: '${title}'`);
     console.log(`🎯 Options: ${JSON.stringify(options)}`);
     
+    // Convertir toutes les options en strings dès le début
+    const stringOptions = options.map(opt => String(opt));
+    
     // 1. Base de données
-    const dbAnswer = questionDB.findAnswer(title, questionText, options);
-    if (dbAnswer && options.includes(dbAnswer)) {
+    const dbAnswer = questionDB.findAnswer(title, questionText, stringOptions);
+    if (dbAnswer && stringOptions.includes(dbAnswer)) {
         console.log(`📚 Réponse DB: '${dbAnswer}'`);
         return { answer: dbAnswer, source: "database" };
     }
     
     // 2. Correspondance strstr
-    const strstrResult = strstrMatch(title, options);
+    const strstrResult = strstrMatch(title, stringOptions);
     if (strstrResult) {
         return { answer: strstrResult, source: "strstr" };
     }
     
     // 3. Analyse artiste/titre
-    const artistTitleResult = artistTitleAnalysis(title, options, questionText);
+    const artistTitleResult = artistTitleAnalysis(title, stringOptions, questionText);
     if (artistTitleResult) {
         return { answer: artistTitleResult, source: "artist_title" };
     }
