@@ -433,7 +433,7 @@ async function submitAnswer(answer) {
 // Algorithmes de résolution (portés du Python)
 function normalizeText(text) {
     if (!text) return "";
-    return text.toString().toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').strip();
+    return text.toString().toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
 }
 
 function strstrMatch(title, options) {
